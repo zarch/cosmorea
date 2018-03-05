@@ -15,3 +15,9 @@ The tools must be modify to be a set of shell scripts with no hard-coded paths.
 ## requirements
 
 The tools required GRASS GIS, grass_session library, and cdo to convert and read the grib format.
+
+
+## approach
+
+The general approach is to have specific command lines that can be executed in parallel,
+So you can start downloading the files, start reprojecting, and importing into a GRASS GIS location all in parallel.
