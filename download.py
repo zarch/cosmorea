@@ -23,7 +23,7 @@ REA6_2D_VARS = {"CLCT": "total cloud cover",
                 "RELHUM_2M": "relative humidity in 2m",
                 "SWDIFDS_RAD": "instantaneous direct radiation",
                 "SWDIRS_RAD": "instantaneous diffuse radiation",
-                "TOT_PREC": "total precipitation",
+                "TOT_PRECIP": "total precipitation",
                 "TQV": "total column water vapor content",
                 "T_2M": "temperature in 2m",
                 "U_10M": "wind velocity at 10 m, u direction",
@@ -64,7 +64,10 @@ REA2_2D_VARS = {"CLCT": "total cloud cover",
 def download(host, path, pattern, down_dir='download'):
     ftp = ftplib.FTP(host)
     ftp.login()
-    ftp.cwd(path)
+    try:
+        ftp.cwd(path)
+    except ftplib.all_errors as e:
+        raise e
     flist = fnmatch.filter(ftp.nlst(), pattern)
     flen = len(flist)
     os.makedirs(down_dir, exist_ok=True)
