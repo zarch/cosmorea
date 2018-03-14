@@ -87,7 +87,7 @@ def main(args):
     else:
         typ = "2D"
     for var in args.variables[0].split(','):
-        for year in range(args.endyear, args.startyear, -1):
+        for year in range(args.endyear, args.startyear - 1, -1):
             if args.rea2:
                 mypath = '/'.join([mydir, args.time, typ, var, f"{year}"])
             else:
