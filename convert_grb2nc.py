@@ -69,7 +69,10 @@ def convert_all(ibasedir, obasedir, fpattern, sep, **copts):
 
 
 def main(args):
-    FGRID = os.path.join(args.OUTPUT_DIR, "grid.txt")
+    if args.file:
+        FGRID = args.file
+    else:
+        FGRID = os.path.join(args.OUTPUT_DIR, "grid.txt")
     if not os.path.exists(FGRID):
         raise IOError(f"{FGRID} doesn't exist")
     if args.year:
