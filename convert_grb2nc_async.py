@@ -72,29 +72,52 @@ def load_queue(queue, ibasedir, obasedir, fpattern, sep, **copts):
             gpath = os.path.join(base, grfile)
             ipath = os.path.join(base, ifile)
             if not os.path.exists(opath):
-                cdo = CDO.format(finput=ipath, foutput=opath, **copts)
+                cdo = CDO.format(finput=gpath, foutput=opath, **copts)
                 yield from queue.put((cdo, ipath, gpath, opath))
 
 
 def main(args):
-    FGRID = os.path.join(args.OUTPUT_DIR, "new_grid.txt")
-    NUM = 12
+    if args.file:
+        FGRID = args.file
+    else:
+        FGRID = os.path.join(args.OUTPUT_DIR, "grid.txt")
+    if not os.path.exists(FGRID):
+        raise IOError(f"{FGRID} doesn't exist")
+    NUM=12
     if args.year:
         patt = "*{ye}*.grb.bz2".format(ye=args.year)
     else:
         patt = "*.grb.bz2"
-    queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
-    loop.set_default_executor(ThreadPoolExecutor(NUM))
-    coros = [asyncio.async(convert(queue)) for i in range(NUM)]
-    loop.run_until_complete(load_queue(queue,
-                                       ibasedir=args.INPUT_DIR,
-                                       obasedir=args.OUTPUT_DIR,
-                                       fpattern=patt, sep=args.sep, ffmt=FFMT,
-                                       ftype=FTYPE, fprocs=args.nproc,
-                                       fzip=FZIP, fgrid=FGRID))
-    loop.run_until_complete(asyncio.wait(coros))
-    print("Finished! B-)")
+    if args.variables:
+        for var in args.variables[0].split(','):
+            patt = "{va}{pa}".format(va=var, pa=patt)
+            queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            loop.set_default_executor(ThreadPoolExecutor(NUM))
+            coros = [asyncio.async(convert(queue)) for i in range(NUM)]
+            loop.run_until_complete(load_queue(queue,
+                                               ibasedir=args.INPUT_DIR,
+                                               obasedir=args.OUTPUT_DIR,
+                                               fpattern=patt, sep=args.sep,
+                                               ffmt=FFMT, ftype=FTYPE,
+                                               fprocs=args.nproc,
+                                               fzip=FZIP, fgrid=FGRID))
+            loop.run_until_complete(asyncio.wait(coros))
+            print("Finished! B-)")
+    else:
+        queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+        loop.set_default_executor(ThreadPoolExecutor(NUM))
+        coros = [asyncio.async(convert(queue)) for i in range(NUM)]
+        loop.run_until_complete(load_queue(queue,
+                                           ibasedir=args.INPUT_DIR,
+                                           obasedir=args.OUTPUT_DIR,
+                                           fpattern=patt, sep=args.sep,
+                                           ffmt=FFMT, ftype=FTYPE,
+                                           fprocs=args.nproc,
+                                           fzip=FZIP, fgrid=FGRID))
+        loop.run_until_complete(asyncio.wait(coros))
+        print("Finished! B-)")
 
 
 if __name__ == "__main__":
@@ -103,6 +126,8 @@ if __name__ == "__main__":
                         "store the downloaded data")
     parser.add_argument("OUTPUT_DIR", help="The output directory where to "
                         "store the downloaded data")
+    parser.add_argument("-f", "--file", help="The full path to a txt file "
+                        "contains the properties of the new grid.")
     parser.add_argument("-v", "--variables", help="The selected variables to"
                         " process", nargs='+')
     parser.add_argument("-n", "--nproc", type=int, default=2,
