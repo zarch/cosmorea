@@ -33,7 +33,7 @@ def get_outputs(basedir, fname, sep):
         print("FNAME: {name} - {base}".format(name=fname, base=basedir))
         return "", ""
     var, typ, date = vals[:3]
-    conv_dir = os.path.join(basedir, f"{var}")
+    conv_dir = os.path.join(basedir, "{va}".format(va=var))
     os.makedirs(conv_dir, exist_ok=True)
     return conv_dir, GRNAME.format(var=var, date=date), NCNAME.format(var=var, date=date)
 
