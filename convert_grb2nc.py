@@ -30,7 +30,7 @@ def get_outputs(basedir, fname, sep):
     if vals[-1] == 'bz2':
         vals = vals[:-1]
     if len(vals) != 4:
-        print(f"FNAME: {fname} - {basedir}")
+        print("FNAME: {name} - {base}".format(name=fname, base=basedir))
         return "", ""
     var, typ, date = vals[:3]
     conv_dir = os.path.join(basedir, f"{var}")
@@ -48,9 +48,10 @@ def convert_all(ibasedir, obasedir, fpattern, sep, **copts):
             gpath = os.path.join(base, grfile)
             ipath = os.path.join(base, ifile)
             if os.path.exists(opath):
-                print(f"File {ifile} already exists: {ofile}")
+                print("File {ifi} already exists: {ofi}".format(ifi=ifile,
+                                                                ofi=ofile))
             else:
-                print(f"File {ifile}: {ofile}")
+                print("File {ifi}: {ofi}".format(ifi=ifile, ofi=ofile))
                 with open(gpath, 'wb') as grbfile, bz2.BZ2File(ipath, 'rb') as file:
                     grbfile.write(file.read())
                 grbfile.close()
@@ -74,7 +75,7 @@ def main(args):
     else:
         FGRID = os.path.join(args.OUTPUT_DIR, "grid.txt")
     if not os.path.exists(FGRID):
-        raise IOError(f"{FGRID} doesn't exist")
+        raise IOError("{fg} doesn't exist".format(fg=FGRID))
     if args.year:
         patt = "*{ye}*.grb.bz2".format(ye=args.year)
     else:
