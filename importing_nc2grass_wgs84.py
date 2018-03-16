@@ -12,13 +12,12 @@ from datetime import datetime
 import fnmatch
 import os
 import socket
-import time
-
+import argparse
 
 import grass_session as gs
 
 from grass.pygrass.modules import Module, ParallelModuleQueue
-from grass.pygrass.gis import Location, Mapset
+from grass.pygrass.gis import Mapset
 
 
 def get_file_to_import(basedir, file_pat="*.nc"):
@@ -27,27 +26,30 @@ def get_file_to_import(basedir, file_pat="*.nc"):
         for fil in ifiles:
             yield root, fil
 
-def get_files_to_reproject(gisdbase, location, pattern):
-    loc = Location()
 
-
-def extract_date(rast, datefmt="%y%m%d_%H"):
+def extract_date(rast, datefmt="%Y%m"):
     """Return a tuple containing the basename of te file and the
     datetime instance.
 
-    >>> extract_date("/share/data/EU/climatic/DWD/COSMO_REA6/T/3D"
-    ...              "/convert/2015/01/T_20150131_11.nc",
+    >>> extract_date("T_2M_201501.nc",
     ...              datefmt="%y%m%d_%H")
     ("T_", datetime.datetime(2017, 12, 31, 11, 00)
     """
     fname, ext = os.path.splitext(rast)
-    base, date, hour = fname.split('_')
-    dtime = datetime.strptime("{date}_{hour}".format(date=date, hour=hour),
-                              datefmt)
+    fsplit = fname.split('_')
+    if len(fsplit) == 3:
+        base = '_'.join(fsplit[:2])
+        date = fsplit[2]
+    elif len(fsplit) == 2:
+        base = fsplit[0]
+        date =  fsplit[1]
+    else:
+        print(f"Strange input name {rast}")
+    dtime = datetime.strptime(date, datefmt)
     return base, dtime
 
 
-def import2grass(files, gisdbase, location, datefmt="%Y%m%d_%H",
+def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m%d_%H",
                  mapset_fmt="%Y_%m", raster_fmt="%Y%m%d_%H",
                  input_fmt="NETCDF:{input_file}",
                  nprocs=4, **kwargs):
@@ -57,27 +59,33 @@ def import2grass(files, gisdbase, location, datefmt="%Y%m%d_%H",
     queue = ParallelModuleQueue(nprocs=nprocs)
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
-        mset_name = date.strftime(mapset_fmt)
-        mset_path = os.path.join(gisdbase, location, mset_name)
-        if not os.path.exists(mset_path):
-            gs.grass_create(gs.GRASSBIN, mset_path, create_opts="")
+        if mapset_fmt:
+            mset_name = date.strftime(mapset_fmt)
+            mset_path = os.path.join(gisdbase, location, mset_name)
+            if not os.path.exists(mset_path):
+                gs.grass_create(gs.GRASSBIN, mset_path, create_opts="")
+                try:
+                    os.makedirs(os.path.join(mset_path, '.tmp'))
+                    os.makedirs(os.path.join(mset_path, '.tmp',
+                                             socket.gethostname()))
+                except:
+                    # ignore error in creating the
+                    pass
             try:
-                os.makedirs(os.path.join(mset_path, '.tmp'))
-                os.makedirs(os.path.join(mset_path, '.tmp',
-                                         socket.gethostname()))
-            except:
-                # ignore error in creating the
-                pass
-        try:
-            menv = mset_envs[mset_name]
-            rasters = mset_rasters[mset_name]
-        except KeyError:
-            menv = gs.grass_init(gs.GISBASE, gisdbase, location, mset_name,
+                menv = mset_envs[mset_name]
+                rasters = mset_rasters[mset_name]
+            except KeyError:
+                menv = gs.grass_init(gs.GISBASE, gisdbase, location, mset_name,
+                                     env=env.copy())
+                mset_envs[mset_name] = menv
+                mset = Mapset(mset_name, location=location, gisdbase=gisdbase)
+                rasters = set(mset.glist("raster"))
+                mset_rasters[mset_name] = rasters
+        else:
+            menv = gs.grass_init(gs.GISBASE, gisdbase, location, mapset,
                                  env=env.copy())
-            mset_envs[mset_name] = menv
-            mset = Mapset(mset_name, location=location, gisdbase=gisdbase)
+            mset = Mapset(mapset, location=location, gisdbase=gisdbase)
             rasters = set(mset.glist("raster"))
-            mset_rasters[mset_name] = rasters
         rast_name = date.strftime(raster_fmt)
         if rast_name + '.1' not in rasters or rast_name + '.6' not in rasters:
             ifile = os.path.join(fdir, fil)
@@ -91,20 +99,33 @@ def import2grass(files, gisdbase, location, datefmt="%Y%m%d_%H",
     queue.wait()
 
 
-if __name__ == "__main__":
+def main(args):
     # enable compression of NULLs and raster maps
     os.environ["GRASS_COMPRESS_NULLS"] = "1"
     os.environ["GRASS_COMPRESSR"] = "ZSTD"
     os.environ["GRASS_ZLIB_LEVEL"] = "6"
     # set GRASS paths
-    GISDBASE = "/share/data/EU/climatic/DWD/COSMO_REA6/T/3D/grassdb"
-    LOCATION = "wgs84"
+    GISDBASE = args.grassdata
+    LOCATION = args.location
+    MAPSET = args.mapset
     # set projection
     create_opts="EPSG:4326"
 
     # directory containing NetCDF file to import
-    BASEDIR = "/share/data/EU/climatic/DWD/COSMO_REA6/T/3D/convert/2015"
+    BASEDIR = args.INPUT_DIR
 
+    if args.year:
+        patt = "*{ye}*.nc".format(ye=args.year)
+    else:
+        patt = "*.nc"
+    if args.variables:
+        patt = "{va}{pa}".format(va=args.variables, pa=patt)
+
+    mapsetfmt = None
+    if args.ymapset:
+        mapsetfmt = "{va}_%Y".format(va=MAPSET)
+    elif args.mmapset:
+        mapsetfmt = "{va}_%Y_%m".format(va=MAPSET)
     # create a new location if not exists already
     if not os.path.exists(os.path.join(GISDBASE, LOCATION)):
         gs.grass_create(gs.GRASSBIN, os.path.join(GISDBASE, LOCATION),
@@ -113,17 +134,47 @@ if __name__ == "__main__":
     with gs.Session(grassbin=gs.GRASSBIN,
                     gisdb=GISDBASE,
                     location=LOCATION,
-                    mapset="PERMANENT") as sess:
-        import2grass(files=sorted(get_file_to_import(BASEDIR,
-                                                     file_pat="T_2015*.nc")),
+                    mapset=MAPSET) as sess:
+        import2grass(files=sorted(get_file_to_import(BASEDIR, file_pat=patt)),
                      gisdbase=GISDBASE,
                      location=LOCATION,
+                     mapset=MAPSET,
                      datefmt="%Y%m%d_%H",
-                     mapset_fmt="o%Y_%m",
+                     mapset_fmt=mapsetfmt,
                      raster_fmt="T_%Y%m%d_%H",
-                     nprocs=12,
+                     nprocs=args.nprocs,
                      input_fmt="NETCDF:{input_file}",
-                     memory=2040,
-                     title="COSMO REA6: Air Temperature",
+                     memory=args.ram,
+                     title="COSMO REA6: {title}",
                      flags="o",
-                     overwrite=True)
+                     overwrite=args.overwrite)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("INPUT_DIR", help="The input directory where to "
+                        "NetCDF are stored")
+    parser.add_argument("-g", "--grassdata", help="The full path to GRASSDATA",
+                        required=True)
+    parser.add_argument("-l", "--location", help="The GRASS LOCATION to use",
+                        required=True)
+    parser.add_argument("-m", "--mapset", default="PERMANENT",
+                        help="The GRASS MAPSET to use (default: %(default)s, "
+                        "it is not suggested to use this)")
+    parser.add_argument("-v", "--variables", help="The selected variables to"
+                        " process", nargs='+')
+    parser.add_argument("-n", "--nproc", type=int, default=2,
+                        help="Processors' number to use (default: %(default)s)")
+    parser.add_argument("-y", "--year", type=int, help="Year to analyze")
+    parser.add_argument("-r", "--remove", action="store_true",
+                        help="Remove NetCDF files")
+    parser.add_argument("-Y", "--ymapset", action="store_true",
+                        help="Create annual mapset")
+    parser.add_argument("-M", "--mmapset", action="store_true",
+                        help="Create monthly mapset")
+    parser.add_argument("-r", "--ram", default=2048,
+                        help="Memory to use to import data")
+    parser.add_argument("-o", "--overwrite", action="store_true",
+                        help="Set overwrite flag in r.in.gdal")
+    args = parser.parse_args()
+    main(args)
