@@ -60,6 +60,7 @@ def convert(queue):
             print(stdout)
             print(stderr)
             print("-" * 30)
+    return
 
 
 @asyncio.coroutine
@@ -74,6 +75,7 @@ def load_queue(queue, ibasedir, obasedir, fpattern, sep, **copts):
             if not os.path.exists(opath):
                 cdo = CDO.format(finput=gpath, foutput=opath, **copts)
                 yield from queue.put((cdo, ipath, gpath, opath))
+    return
 
 
 def main(args):
@@ -118,6 +120,7 @@ def main(args):
                                            fzip=FZIP, fgrid=FGRID))
         loop.run_until_complete(asyncio.wait(coros))
         print("Finished! B-)")
+    return
 
 
 if __name__ == "__main__":
