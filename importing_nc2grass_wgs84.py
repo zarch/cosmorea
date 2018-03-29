@@ -16,9 +16,6 @@ import argparse
 
 import grass_session as gs
 
-from grass.pygrass.modules import Module, ParallelModuleQueue
-from grass.pygrass.gis import Mapset
-
 
 def get_file_to_import(basedir, file_pat="*.nc"):
     """Return base directory and files matching with pattern"""
@@ -51,6 +48,8 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
                  mapset_fmt="%Y_%m", raster_fmt="%Y_%m",
                  input_fmt="NETCDF:{input_file}",
                  nprocs=4, **kwargs):
+    from grass.pygrass.modules import Module, ParallelModuleQueue
+    from grass.pygrass.gis import Mapset
     years = []
     env = os.environ.copy()
     mset_envs = {}
@@ -121,14 +120,16 @@ def main(args):
         patt = "*{ye}*.nc".format(ye=args.year)
     else:
         patt = "*.nc"
-    if args.variables:
-        patt = "{va}{pa}".format(va=args.variables, pa=patt)
 
     mapsetfmt = None
     if args.ymapset:
         mapsetfmt = "{va}_%Y".format(va=MAPSET)
     elif args.mmapset:
         mapsetfmt = "{va}_%Y_%m".format(va=MAPSET)
+
+    title = "COSMO REA6"
+    if args.title:
+        title = "{pr}: {ti}".format(pr=title, ti=args.title)
     # create a new location if not exists already
     if not os.path.exists(os.path.join(GISDBASE, LOCATION)):
         gs.grass_create(gs.GRASSBIN, os.path.join(GISDBASE, LOCATION),
@@ -138,17 +139,34 @@ def main(args):
                     gisdb=GISDBASE,
                     location=LOCATION,
                     mapset=MAPSET) as sess:
-        yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
-                                                           file_pat=patt)),
-                                        gisdbase=GISDBASE,
-                                        location=LOCATION,
-                                        mapset=MAPSET,
-                                        mapset_fmt=mapsetfmt,
-                                        nprocs=args.nprocs,
-                                        memory=args.ram,
-                                        title="COSMO REA6: {title}",
-                                        flags="o",
-                                        overwrite=args.overwrite)
+        if args.variables:
+            for varia in args.variables.split(','):
+                patt = "{va}{pa}".format(va=args.varia, pa=patt)
+                if not args.title:
+                    title = "{pr}: {ti}".format(pr=title, ti=varia)
+                yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
+                                                                   file_pat=patt)),
+                                   gisdbase=GISDBASE,
+                                   location=LOCATION,
+                                   mapset=MAPSET,
+                                   mapset_fmt=mapsetfmt,
+                                   nprocs=args.nprocs,
+                                   memory=args.ram,
+                                   title=title,
+                                   flags="o",
+                                   overwrite=args.overwrite)
+        else:
+            yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
+                                                               file_pat=patt)),
+                               gisdbase=GISDBASE,
+                               location=LOCATION,
+                               mapset=MAPSET,
+                               mapset_fmt=mapsetfmt,
+                               nprocs=args.nprocs,
+                               memory=args.ram,
+                               title=title,
+                               flags="o",
+                               overwrite=args.overwrite)
 
 
 if __name__ == "__main__":
@@ -163,8 +181,8 @@ if __name__ == "__main__":
                         help="The GRASS MAPSET to use (default: %(default)s, "
                         "it is not suggested to use this)")
     parser.add_argument("-v", "--variables", help="The selected variables to"
-                        " process", nargs='+')
-    parser.add_argument("-n", "--nproc", type=int, default=2,
+                        " process, comma separated", nargs='+')
+    parser.add_argument("-n", "--nprocs", type=int, default=2,
                         help="Processors' number to use (default: %(default)s)")
     parser.add_argument("-y", "--year", type=int, help="Year to analyze")
     parser.add_argument("-r", "--remove", action="store_true",
@@ -173,7 +191,7 @@ if __name__ == "__main__":
                         help="Create annual mapset")
     parser.add_argument("-M", "--mmapset", action="store_true",
                         help="Create monthly mapset")
-    parser.add_argument("-r", "--ram", default=2048,
+    parser.add_argument("-R", "--ram", default=2048,
                         help="Memory to use to import data")
     parser.add_argument("-o", "--overwrite", action="store_true",
                         help="Set overwrite flag in r.in.gdal")
