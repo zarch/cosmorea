@@ -21,6 +21,7 @@ from grass.pygrass.gis import Mapset
 
 
 def get_file_to_import(basedir, file_pat="*.nc"):
+    """Return base directory and files matching with pattern"""
     for root, _, files in os.walk(basedir):
         ifiles = fnmatch.filter(files, file_pat)
         for fil in ifiles:
@@ -33,32 +34,33 @@ def extract_date(rast, datefmt="%Y%m"):
 
     >>> extract_date("T_2M_201501.nc",
     ...              datefmt="%y%m%d_%H")
-    ("T_", datetime.datetime(2017, 12, 31, 11, 00)
+    ("T_", datetime.datetime(2015, 1, 1, 0, 0)
     """
     fname, ext = os.path.splitext(rast)
-    fsplit = fname.split('_')
-    if len(fsplit) == 3:
-        base = '_'.join(fsplit[:2])
-        date = fsplit[2]
-    elif len(fsplit) == 2:
-        base = fsplit[0]
-        date =  fsplit[1]
-    else:
-        print(f"Strange input name {rast}")
+    base, date, hour = fname.split('_')
+    dtime = datetime.strptime("{date}_{hour}".format(date=date, hour=hour),
+                              datefmt)
+    fname = os.path.splitext(rast)[0]
+    base =fname[:-7]
+    date = fname[-6:]
     dtime = datetime.strptime(date, datefmt)
     return base, dtime
 
 
-def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m%d_%H",
-                 mapset_fmt="%Y_%m", raster_fmt="%Y%m%d_%H",
+def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
+                 mapset_fmt="%Y_%m", raster_fmt="%Y_%m",
                  input_fmt="NETCDF:{input_file}",
                  nprocs=4, **kwargs):
+    years = []
     env = os.environ.copy()
     mset_envs = {}
     mset_rasters = {}
     queue = ParallelModuleQueue(nprocs=nprocs)
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
+        year = date.year
+        if not year in years:
+            years.append(year)
         if mapset_fmt:
             mset_name = date.strftime(mapset_fmt)
             mset_path = os.path.join(gisdbase, location, mset_name)
@@ -86,7 +88,7 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m%d_%H",
                                  env=env.copy())
             mset = Mapset(mapset, location=location, gisdbase=gisdbase)
             rasters = set(mset.glist("raster"))
-        rast_name = date.strftime(raster_fmt)
+        rast_name = "{ba}_{da}".format(ba=base, da=date.strftime(raster_fmt))
         if rast_name + '.1' not in rasters or rast_name + '.6' not in rasters:
             ifile = os.path.join(fdir, fil)
             mod = Module("r.in.gdal",
@@ -97,6 +99,7 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m%d_%H",
             #time.sleep(0.2) # sllep otherwise there is a problem in creating
             queue.put(mod)
     queue.wait()
+    return years
 
 
 def main(args):
@@ -135,19 +138,17 @@ def main(args):
                     gisdb=GISDBASE,
                     location=LOCATION,
                     mapset=MAPSET) as sess:
-        import2grass(files=sorted(get_file_to_import(BASEDIR, file_pat=patt)),
-                     gisdbase=GISDBASE,
-                     location=LOCATION,
-                     mapset=MAPSET,
-                     datefmt="%Y%m%d_%H",
-                     mapset_fmt=mapsetfmt,
-                     raster_fmt="T_%Y%m%d_%H",
-                     nprocs=args.nprocs,
-                     input_fmt="NETCDF:{input_file}",
-                     memory=args.ram,
-                     title="COSMO REA6: {title}",
-                     flags="o",
-                     overwrite=args.overwrite)
+        yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
+                                                           file_pat=patt)),
+                                        gisdbase=GISDBASE,
+                                        location=LOCATION,
+                                        mapset=MAPSET,
+                                        mapset_fmt=mapsetfmt,
+                                        nprocs=args.nprocs,
+                                        memory=args.ram,
+                                        title="COSMO REA6: {title}",
+                                        flags="o",
+                                        overwrite=args.overwrite)
 
 
 if __name__ == "__main__":
@@ -176,5 +177,7 @@ if __name__ == "__main__":
                         help="Memory to use to import data")
     parser.add_argument("-o", "--overwrite", action="store_true",
                         help="Set overwrite flag in r.in.gdal")
+    parser.add_argument("-t", "--title", help="The title to save in the map's "
+                        "history")
     args = parser.parse_args()
     main(args)
