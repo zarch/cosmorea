@@ -34,9 +34,6 @@ def extract_date(rast, datefmt="%Y%m"):
     ("T_", datetime.datetime(2015, 1, 1, 0, 0)
     """
     fname, ext = os.path.splitext(rast)
-    base, date, hour = fname.split('_')
-    dtime = datetime.strptime("{date}_{hour}".format(date=date, hour=hour),
-                              datefmt)
     fname = os.path.splitext(rast)[0]
     base =fname[:-7]
     date = fname[-6:]
@@ -55,6 +52,7 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
     mset_envs = {}
     mset_rasters = {}
     queue = ParallelModuleQueue(nprocs=nprocs)
+    
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
         year = date.year
@@ -90,11 +88,10 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
         rast_name = "{ba}_{da}".format(ba=base, da=date.strftime(raster_fmt))
         if rast_name + '.1' not in rasters or rast_name + '.6' not in rasters:
             ifile = os.path.join(fdir, fil)
-            mod = Module("r.in.gdal",
+            mod = Module("r.in.gdal", quiet=True,
                          input=input_fmt.format(input_file=ifile),
                          output=rast_name, run_=False, **kwargs)
             mod.env_ = menv
-            print(rast_name, ifile)
             #time.sleep(0.2) # sllep otherwise there is a problem in creating
             queue.put(mod)
     queue.wait()
@@ -142,10 +139,10 @@ def main(args):
         if args.variables:
             for varia in args.variables.split(','):
                 patt = "{va}{pa}".format(va=args.varia, pa=patt)
+                fils = sorted(get_file_to_import(BASEDIR, file_pat=patt))
                 if not args.title:
                     title = "{pr}: {ti}".format(pr=title, ti=varia)
-                yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
-                                                                   file_pat=patt)),
+                yrs = import2grass(files=fils,
                                    gisdbase=GISDBASE,
                                    location=LOCATION,
                                    mapset=MAPSET,
@@ -156,8 +153,8 @@ def main(args):
                                    flags="o",
                                    overwrite=args.overwrite)
         else:
-            yrs = import2grass(files=sorted(get_file_to_import(BASEDIR,
-                                                               file_pat=patt)),
+            fils = sorted(get_file_to_import(BASEDIR, file_pat=patt))
+            yrs = import2grass(files=fils,
                                gisdbase=GISDBASE,
                                location=LOCATION,
                                mapset=MAPSET,
