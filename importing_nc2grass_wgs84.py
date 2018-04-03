@@ -51,7 +51,8 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
     env = os.environ.copy()
     mset_envs = {}
     mset_rasters = {}
-    queue = ParallelModuleQueue(nprocs=nprocs)
+    if nprocs > 1:
+        queue = ParallelModuleQueue(nprocs=nprocs)
     
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
@@ -91,10 +92,14 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
             mod = Module("r.in.gdal", quiet=True,
                          input=input_fmt.format(input_file=ifile),
                          output=rast_name, run_=False, **kwargs)
-            mod.env_ = menv
-            #time.sleep(0.2) # sllep otherwise there is a problem in creating
-            queue.put(mod)
-    queue.wait()
+            if nprocs > 1:
+                mod.env_ = menv
+                #time.sleep(0.2) # sllep otherwise there is a problem in creating
+                queue.put(mod)
+            else:
+                mod.run()
+    if nprocs > 1:
+        queue.wait()
     return years
 
 
@@ -180,7 +185,8 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--variables", help="The selected variables to"
                         " process, comma separated", nargs='+')
     parser.add_argument("-n", "--nprocs", type=int, default=2,
-                        help="Processors' number to use (default: %(default)s)")
+                        help="Processors' number to use, 1 for singular run "
+                        "without ParallelModuleQueue (default: %(default)s)")
     parser.add_argument("-y", "--year", type=int, help="Year to analyze")
     parser.add_argument("-r", "--remove", action="store_true",
                         help="Remove NetCDF files")
