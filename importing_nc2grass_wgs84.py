@@ -75,11 +75,15 @@ def rename_maps(base, date=None, year=None, month=None, log=None):
     fi.close()
 
 
-def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
-                 mapset_fmt="%Y_%m", raster_fmt="%Y_%m",
-                 input_fmt="NETCDF:{input_file}",
-                 nprocs=4, rename=False, **kwargs):
-
+def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
+                 raster_fmt="%Y_%m", input_fmt="NETCDF:{input_file}",
+                 **kwargs):
+    # old variables
+    nprocs = args.nprocs
+    gisdbase = args.grassdata
+    location = args.location
+    mapset = args.mapset
+    rename = args.rename
     outs = {}
     env = os.environ.copy()
     mset_envs = {}
@@ -89,7 +93,6 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
     
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
-        year = date.year
         if base not in outs.keys():
             outs[base] = []
         else:
@@ -185,12 +188,8 @@ def main(args):
                 if not args.title:
                     title = "{pr}: {ti}".format(pr=title, ti=varia)
                 yrs = import2grass(files=fils,
-                                   gisdbase=GISDBASE,
-                                   location=LOCATION,
-                                   mapset=MAPSET,
+                                   args=args,
                                    mapset_fmt=mapsetfmt,
-                                   nprocs=args.nprocs,
-                                   rename=args.rename,
                                    memory=args.ram,
                                    title=title,
                                    flags="o",
@@ -198,12 +197,8 @@ def main(args):
         else:
             fils = sorted(get_file_to_import(BASEDIR, file_pat=patt))
             yrs = import2grass(files=fils,
-                               gisdbase=GISDBASE,
-                               location=LOCATION,
-                               mapset=MAPSET,
+                               args=args,
                                mapset_fmt=mapsetfmt,
-                               nprocs=args.nprocs,
-                               rename=args.rename,
                                memory=args.ram,
                                title=title,
                                flags="o",
