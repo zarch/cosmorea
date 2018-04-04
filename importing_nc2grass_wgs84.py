@@ -160,7 +160,8 @@ def main(args):
     BASEDIR = args.INPUT_DIR
 
     if args.year and args.month:
-        patt = "*{ye}*{mo}.nc".format(ye=args.year, mo=args.month.zfill(2))
+        patt = "*{ye}*{mo}.nc".format(ye=args.year,
+                                      mo=str(args.month).zfill(2))
     elif args.year:
         patt = "*{ye}*.nc".format(ye=args.year)
     elif args.month and not args.year:
@@ -193,6 +194,7 @@ def main(args):
                 fils = sorted(get_file_to_import(BASEDIR, file_pat=patt))
                 if not args.title:
                     title = "{pr}: {ti}".format(pr=title, ti=varia)
+
                 yrs = import2grass(files=fils,
                                    args=args,
                                    mapset_fmt=mapsetfmt,
