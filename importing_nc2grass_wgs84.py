@@ -72,7 +72,8 @@ def rename_maps(base, date=None, year=None, month=None, log=None):
             if cop.outputs.stderr:
                 fi.write("{}\n".format(cop.outputs.stderr))
         mydat = mydat + timedelta(seconds=3600)
-    fi.close()
+    if log:
+        fi.close()
 
 
 def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
@@ -137,7 +138,7 @@ def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
             else:
                 mod.run()
                 if rename:
-                    rename_maps(base, date)
+                    rename_maps(base, date, log=args.log)
     if nprocs > 1:
         queue.wait()
     return outs
