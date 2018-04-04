@@ -228,6 +228,7 @@ if __name__ == "__main__":
                         help="Processors' number to use, 1 for singular run "
                         "without ParallelModuleQueue (default: %(default)s)")
     parser.add_argument("-y", "--year", type=int, help="Year to analyze")
+    parser.add_argument("-t", "--month", type=int, help="Month to analyze")
     parser.add_argument("-r", "--remove", action="store_true",
                         help="Remove NetCDF files")
     parser.add_argument("-Y", "--ymapset", action="store_true",
@@ -238,7 +239,7 @@ if __name__ == "__main__":
                         help="Memory to use to import data")
     parser.add_argument("-o", "--overwrite", action="store_true",
                         help="Set overwrite flag in r.in.gdal")
-    parser.add_argument("-t", "--title", help="The title to save in the map's "
+    parser.add_argument("-T", "--title", help="The title to save in the map's "
                         "history")
     parser.add_argument("-w", "--rename", action="store_true",
                         help="Rename the maps with date and time")
