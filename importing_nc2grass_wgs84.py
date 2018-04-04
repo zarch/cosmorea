@@ -9,13 +9,19 @@ from __future__ import print_function
 
 
 from datetime import datetime
+from datetime import timedelta
 import fnmatch
+import sys
 import os
 import socket
 import argparse
-
+from copy import deepcopy
+from subprocess import PIPE
 import grass_session as gs
-
+from grass.pygrass.modules import Module, ParallelModuleQueue
+from grass.pygrass.gis import Mapset
+#in seconds
+MINUTE = 3600
 
 def get_file_to_import(basedir, file_pat="*.nc"):
     """Return base directory and files matching with pattern"""
@@ -41,13 +47,40 @@ def extract_date(rast, datefmt="%Y%m"):
     return base, dtime
 
 
+def rename_maps(base, date=None, year=None, month=None, log=None):
+    if isinstance(date, datetime):
+        mydat = deepcopy(date)
+    elif year and month:
+        mydat = datetime(year, month, 1, 0, 0)
+    else:
+        print("Please set date or year (with or without month")
+        sys.exit(1)
+    if not date:
+        date = datetime(year, month, 1, 0, 0)
+    if log:
+        fi = open(log, 'w')
+    for do in range(1, 745):
+        cop = Module("g.rename", raster=("{ba}_{mo}.{im}".format(ba=base,
+                                                                 mo=date.strftime("%Y_%m"),
+                                                                 im=do),
+                                         "{ba}_{da}".format(ba=base,
+                                                            da=mydat.strftime("%Y_%m_%d_%H"))),
+                     stdout_=PIPE, stderr_=PIPE)
+        if log:
+            if cop.outputs.stdout:
+                fi.write("{}\n".format(cop.outputs.stdout))
+            if cop.outputs.stderr:
+                fi.write("{}\n".format(cop.outputs.stderr))
+        mydat = mydat + timedelta(seconds=3600)
+    fi.close()
+
+
 def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
                  mapset_fmt="%Y_%m", raster_fmt="%Y_%m",
                  input_fmt="NETCDF:{input_file}",
-                 nprocs=4, **kwargs):
-    from grass.pygrass.modules import Module, ParallelModuleQueue
-    from grass.pygrass.gis import Mapset
-    years = []
+                 nprocs=4, rename=False, **kwargs):
+
+    outs = {}
     env = os.environ.copy()
     mset_envs = {}
     mset_rasters = {}
@@ -57,8 +90,10 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
         year = date.year
-        if not year in years:
-            years.append(year)
+        if base not in outs.keys():
+            outs[base] = []
+        else:
+            outs[base].append(date)
         if mapset_fmt:
             mset_name = date.strftime(mapset_fmt)
             mset_path = os.path.join(gisdbase, location, mset_name)
@@ -98,9 +133,11 @@ def import2grass(files, gisdbase, location, mapset, datefmt="%Y%m",
                 queue.put(mod)
             else:
                 mod.run()
+                if rename:
+                    rename_maps(base, date)
     if nprocs > 1:
         queue.wait()
-    return years
+    return outs
 
 
 def main(args):
@@ -153,6 +190,7 @@ def main(args):
                                    mapset=MAPSET,
                                    mapset_fmt=mapsetfmt,
                                    nprocs=args.nprocs,
+                                   rename=args.rename,
                                    memory=args.ram,
                                    title=title,
                                    flags="o",
@@ -165,10 +203,16 @@ def main(args):
                                mapset=MAPSET,
                                mapset_fmt=mapsetfmt,
                                nprocs=args.nprocs,
+                               rename=args.rename,
                                memory=args.ram,
                                title=title,
                                flags="o",
                                overwrite=args.overwrite)
+        # rename the maps if required by the user
+        if args.nprocs > 1 and args.rename:
+            for bas, dates in yrs.items():
+                for dat in dates:
+                    rename_maps(bas, dat, log=args.log)
 
 
 if __name__ == "__main__":
@@ -200,5 +244,8 @@ if __name__ == "__main__":
                         help="Set overwrite flag in r.in.gdal")
     parser.add_argument("-t", "--title", help="The title to save in the map's "
                         "history")
+    parser.add_argument("-w", "--rename", action="store_true",
+                        help="Rename the maps with date and time")
+    parser.add_argument("-L", "--log", help="The path for the log file")
     args = parser.parse_args()
     main(args)
