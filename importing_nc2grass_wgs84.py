@@ -159,8 +159,13 @@ def main(args):
     # directory containing NetCDF file to import
     BASEDIR = args.INPUT_DIR
 
-    if args.year:
+    if args.year and args.month:
+        patt = "*{ye}*{mo}.nc".format(ye=args.year, mo=args.month.zfill(2))
+    elif args.year:
         patt = "*{ye}*.nc".format(ye=args.year)
+    elif args.month and not args.year:
+        print("'month' option requires also 'year' option")
+        sys.exit(1)
     else:
         patt = "*.nc"
 
