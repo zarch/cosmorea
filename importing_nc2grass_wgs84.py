@@ -76,6 +76,41 @@ def rename_maps(base, date=None, year=None, month=None, log=None):
         fi.close()
 
 
+def convert_maps(base, date=None, year=None, month=None, log=None):
+    """Convert the data if needed, like temperature from kelvin to celsius"""
+    if isinstance(date, datetime):
+        mydat = deepcopy(date)
+    elif year and month:
+        mydat = datetime(year, month, 1, 0, 0)
+    else:
+        print("Please set date or year (with or without month")
+        sys.exit(1)
+    if not date:
+        date = datetime(year, month, 1, 0, 0)
+    if log:
+        fi = open(log, 'w')
+
+    Module("g.region", raster="{ba}_{mo}.{im}".format(ba=base, im=1,
+                                                      mo=date.strftime("%Y_%m")))
+    for do in range(1, 745):
+        out = "{ba}_{da}".format(ba=base, da=mydat.strftime("%Y_%m_%d_%H"))
+        inn = "{ba}_{mo}.{im}".format(ba=base, mo=date.strftime("%Y_%m"),
+                                      im=do)
+        if base == 'T_2M':
+            mapc = Module("r.mapcalc", expression="{ou} = {inn} - "
+                          "273.15".format(ou=out, inn=inn),
+                          stdout_=PIPE, stderr_=PIPE)
+            if log:
+                if mapc.outputs.stdout:
+                    fi.write("{}\n".format(mapc.outputs.stdout))
+                if mapc.outputs.stderr:
+                    fi.write("{}\n".format(mapc.outputs.stderr))
+            Module("g.remove", type="raster", name=inn, flags="f")
+        mydat = mydat + timedelta(seconds=3600)
+    if log:
+        fi.close()
+
+
 def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
                  raster_fmt="%Y_%m", input_fmt="NETCDF:{input_file}",
                  **kwargs):
@@ -85,13 +120,14 @@ def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
     location = args.location
     mapset = args.mapset
     rename = args.rename
+    convert = args.convert
     outs = {}
     env = os.environ.copy()
     mset_envs = {}
     mset_rasters = {}
     if nprocs > 1:
         queue = ParallelModuleQueue(nprocs=nprocs)
-    
+
     for fdir, fil in files:
         base, date = extract_date(fil, datefmt=datefmt)
         if base not in outs.keys():
@@ -137,6 +173,8 @@ def import2grass(files, args, datefmt="%Y%m", mapset_fmt="%Y_%m",
                 queue.put(mod)
             else:
                 mod.run()
+                if convert:
+                    convert_maps(base, date, log=args.log)
                 if rename:
                     rename_maps(base, date, log=args.log)
     if nprocs > 1:
@@ -250,6 +288,8 @@ if __name__ == "__main__":
                         "history")
     parser.add_argument("-w", "--rename", action="store_true",
                         help="Rename the maps with date and time")
+    parser.add_argument("-c", "--convert", action="store_true",
+                        help="Convert data if needed and also rename the maps")
     parser.add_argument("-L", "--log", help="The path for the log file")
     args = parser.parse_args()
     main(args)
