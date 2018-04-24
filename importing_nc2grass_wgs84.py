@@ -254,6 +254,10 @@ def main(args):
             for bas, dates in yrs.items():
                 for dat in dates:
                     rename_maps(bas, dat, log=args.log)
+        elif args.nprocs > 1 and args.convert:
+            for bas, dates in yrs.items():
+                for dat in dates:
+                    convert_maps(bas, dat, log=args.log)
 
 
 if __name__ == "__main__":
