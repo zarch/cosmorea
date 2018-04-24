@@ -1,7 +1,11 @@
-gridtype = lonlat
-xsize = 880
-ysize = 856
-xfirst = -23.375
-yfirst = -28.375
-xinc = 0.055
-yinc = 0.055
++#
++# gridID 1
++#
++gridtype  = lonlat
++xsize     = 1500
++ysize     = 1000
++xfirst    = -30.0
++xinc      = 0.055
++yfirst    = 30.0
++yinc      = 0.055
+
