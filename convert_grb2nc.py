@@ -8,6 +8,7 @@ Created on Mon Nov 27 11:35:32 2017
 import asyncio
 from asyncio import subprocess
 import fnmatch
+import sys
 import os
 import argparse
 import bz2
@@ -76,10 +77,17 @@ def main(args):
         FGRID = os.path.join(args.OUTPUT_DIR, "grid.txt")
     if not os.path.exists(FGRID):
         raise IOError("{fg} doesn't exist".format(fg=FGRID))
-    if args.year:
+    if args.year and args.month:
+        patt = "*{ye}*{mo}.grb.bz2".format(ye=args.year,
+                                      mo=str(args.month).zfill(2))
+    elif args.year:
         patt = "*{ye}*.grb.bz2".format(ye=args.year)
+    elif args.month and not args.year:
+        print("'month' option requires also 'year' option")
+        sys.exit(1)
     else:
         patt = "*.grb.bz2"
+
     if args.variables:
         for var in args.variables[0].split(','):
             patt = "{va}{pa}".format(va=var, pa=patt)
@@ -112,6 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--nproc", type=int, default=2,
                         help="Processors' number to use (default: %(default)s)")
     parser.add_argument("-y", "--year", type=int, help="Year to analyze")
+    parser.add_argument("-m", "--month", type=int, help="Year to analyze")
     parser.add_argument("-s", "--sep", default=".",
                         help="The separator used into the file name "
                         "(default: %(default)s)")
