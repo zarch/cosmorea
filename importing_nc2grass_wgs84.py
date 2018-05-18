@@ -21,6 +21,7 @@ import grass_session as gs
 from grass.pygrass.modules import Module, ParallelModuleQueue
 from grass.pygrass.gis import Mapset
 from grass.exceptions import CalledModuleError
+from grass.pygrass.raster import RasterRow
 #in seconds
 MINUTE = 3600
 
@@ -48,6 +49,16 @@ def extract_date(rast, datefmt="%Y%m"):
     return base, dtime
 
 
+def check_raster_exists(rast):
+    try:
+        r = RasterRow(inn)
+        r.open()
+        r.close()
+    except:
+        return False
+    return True
+
+
 def rename_maps(base, date=None, year=None, month=None, startnum=1, log=None):
     if isinstance(date, datetime):
         mydat = deepcopy(date)
@@ -61,11 +72,16 @@ def rename_maps(base, date=None, year=None, month=None, startnum=1, log=None):
     if log:
         fi = open(log, 'w')
     for do in range(startnum, 745):
-        cop = Module("g.rename", raster=("{ba}_{mo}.{im}".format(ba=base,
-                                                                 mo=date.strftime("%Y_%m"),
-                                                                 im=do),
-                                         "{ba}_{da}".format(ba=base,
-                                                            da=mydat.strftime("%Y_%m_%d_%H"))),
+        out = "{ba}_{da}".format(ba=base, da=mydat.strftime("%Y_%m_%d_%H"))
+        inn = "{ba}_{mo}.{im}".format(ba=base, mo=date.strftime("%Y_%m"),
+                                      im=do)
+        try:
+            r = RasterRow(inn)
+            r.open()
+            r.close()
+        except:
+            continue
+        cop = Module("g.rename", raster=(inn, out),
                      stdout_=PIPE, stderr_=PIPE)
         if log:
             if cop.outputs.stdout:
@@ -96,6 +112,12 @@ def convert_maps(base, date=None, year=None, month=None, startnum=1, log=None):
         out = "{ba}_{da}".format(ba=base, da=mydat.strftime("%Y_%m_%d_%H"))
         inn = "{ba}_{mo}.{im}".format(ba=base, mo=date.strftime("%Y_%m"),
                                       im=do)
+        try:
+            r = RasterRow(inn)
+            r.open()
+            r.close()
+        except:
+            continue
         if base == 'T_2M':
             try:
                 mapc = Module("r.mapcalc", expression="{ou} = {inn} - "
