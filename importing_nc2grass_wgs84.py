@@ -20,6 +20,7 @@ from subprocess import PIPE
 import grass_session as gs
 from grass.pygrass.modules import Module, ParallelModuleQueue
 from grass.pygrass.gis import Mapset
+from grass.exceptions import CalledModuleError
 #in seconds
 MINUTE = 3600
 
@@ -47,7 +48,7 @@ def extract_date(rast, datefmt="%Y%m"):
     return base, dtime
 
 
-def rename_maps(base, date=None, year=None, month=None, log=None):
+def rename_maps(base, date=None, year=None, month=None, startnum=1, log=None):
     if isinstance(date, datetime):
         mydat = deepcopy(date)
     elif year and month:
@@ -59,7 +60,7 @@ def rename_maps(base, date=None, year=None, month=None, log=None):
         date = datetime(year, month, 1, 0, 0)
     if log:
         fi = open(log, 'w')
-    for do in range(1, 745):
+    for do in range(startnum, 745):
         cop = Module("g.rename", raster=("{ba}_{mo}.{im}".format(ba=base,
                                                                  mo=date.strftime("%Y_%m"),
                                                                  im=do),
@@ -71,41 +72,56 @@ def rename_maps(base, date=None, year=None, month=None, log=None):
                 fi.write("{}\n".format(cop.outputs.stdout))
             if cop.outputs.stderr:
                 fi.write("{}\n".format(cop.outputs.stderr))
-        mydat = mydat + timedelta(seconds=3600)
+        mydat = mydat + timedelta(seconds=MINUTE)
     if log:
         fi.close()
 
 
-def convert_maps(base, date=None, year=None, month=None, log=None):
+def convert_maps(base, date=None, year=None, month=None, startnum=1, log=None):
     """Convert the data if needed, like temperature from kelvin to celsius"""
     if isinstance(date, datetime):
         mydat = deepcopy(date)
     elif year and month:
         mydat = datetime(year, month, 1, 0, 0)
     else:
-        print("Please set date or year (with or without month")
+        print("Please set date or year with or without month")
         sys.exit(1)
     if not date:
         date = datetime(year, month, 1, 0, 0)
     if log:
         fi = open(log, 'w')
-
-    Module("g.region", raster="{ba}_{mo}.{im}".format(ba=base, im=1,
+    Module("g.region", raster="{ba}_{mo}.{im}".format(ba=base, im=startnum,
                                                       mo=date.strftime("%Y_%m")))
-    for do in range(1, 745):
+    for do in range(startnum, 745):
         out = "{ba}_{da}".format(ba=base, da=mydat.strftime("%Y_%m_%d_%H"))
         inn = "{ba}_{mo}.{im}".format(ba=base, mo=date.strftime("%Y_%m"),
                                       im=do)
         if base == 'T_2M':
-            mapc = Module("r.mapcalc", expression="{ou} = {inn} - "
-                          "273.15".format(ou=out, inn=inn),
-                          stdout_=PIPE, stderr_=PIPE)
-            if log:
-                if mapc.outputs.stdout:
-                    fi.write("{}\n".format(mapc.outputs.stdout))
-                if mapc.outputs.stderr:
-                    fi.write("{}\n".format(mapc.outputs.stderr))
-            Module("g.remove", type="raster", name=inn, flags="f")
+            try:
+                mapc = Module("r.mapcalc", expression="{ou} = {inn} - "
+                              "273.15".format(ou=out, inn=inn),
+                              stdout_=PIPE, stderr_=PIPE)
+                if log:
+                    if mapc.outputs.stdout:
+                        fi.write("{}\n".format(mapc.outputs.stdout))
+                    if mapc.outputs.stderr:
+                        fi.write("{}\n".format(mapc.outputs.stderr))
+                Module("g.remove", type="raster", name=inn, flags="f")
+            except CalledModuleError:
+                continue
+        if base == 'TOT_PRECIP':
+            try:
+                mapc = Module("r.mapcalc", expression="{ou} = if({inn} < 0, 0,"
+                              " {inn})".format(ou=out, inn=inn),
+                              stdout_=PIPE, stderr_=PIPE)
+                if log:
+                    if mapc.outputs.stdout:
+                        fi.write("{}\n".format(mapc.outputs.stdout))
+                    if mapc.outputs.stderr:
+                        fi.write("{}\n".format(mapc.outputs.stderr))
+                Module("g.remove", type="raster", name=inn, flags="f")
+            except CalledModuleError:
+                continue
         mydat = mydat + timedelta(seconds=3600)
     if log:
         fi.close()
