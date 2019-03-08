@@ -1,0 +1,11 @@
++#
++# gridID 1
++#
++gridtype  = lonlat
++xsize     = 1500
++ysize     = 1000
++xfirst    = -30.0
++xinc      = 0.055
++yfirst    = 30.0
++yinc      = 0.055
+
