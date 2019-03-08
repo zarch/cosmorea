@@ -76,7 +76,8 @@ def fix_maps_missing_first(base, startdate, shift=3600):
         mydat = mydat - timedelta(seconds=shift)
 
 
-def main()
+def main(args):
+    #TODO
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
