@@ -9,19 +9,14 @@ from __future__ import print_function
 
 
 from datetime import datetime
-import fnmatch
 import os
-import socket
-import tempfile
-import time
-
+import argparse
 
 import grass_session as gs
 
-from grass.pygrass.modules import Module, MultiModule, ParallelModuleQueue
-from grass.pygrass.gis import Location, Mapset
+from grass.pygrass.gis import Location
 
-from grass.script.core import read_command, run_command
+import grass.script as gscript
 
 
 SEP = {'|': 'pipe',
@@ -35,12 +30,12 @@ def extract_date(rast, datefmt="%Y%m%d_%H"):
     return rast[:5], datetime.strptime(rast[6:], datefmt)
 
 
-def register(location, mset_pat, rast_pat,
+def register(mset_pat, rast_pat,
              datefmt="%Y%m%d_%H", mapset_fmt="r%Y_%m",
              raster_fmt="{base}_{date:%Y%m}",
-             sep='|', reg_dir=None, overwrite=False,
+             sep='|', overwrite=False,
              **kwargs):
-    reg_dir = tempfile.mkdtemp() if reg_dir is None else reg_dir
+    reg_dir = gscript.tempdir()
     env = os.environ.copy()
     loc = Location()
     temporals = {}
@@ -56,7 +51,7 @@ def register(location, mset_pat, rast_pat,
 
     # create
     for tname, trasts in temporals.items():
-        run_command("t.create", type="strds", temporaltype="absolute",
+        gscript.run_command("t.create", type="strds", temporaltype="absolute",
                     output=tname, title=tname,
                     description="COSMO REA6: {tname}".format(tname=tname),
                     semantictype="mean", overwrite=overwrite, env=menv)
@@ -64,33 +59,68 @@ def register(location, mset_pat, rast_pat,
         with open(csvfile, mode="w") as csv:
             for row in trasts:
                 csv.write(sep.join(row) + '\n')
-        run_command("t.register", overwrite=overwrite,
+        gscript.run_command("t.register", overwrite=overwrite,
                     type="raster",  input=tname, file=csvfile,
                     separator=SEP.get(sep, sep), env=menv)
 
 
-if __name__ == "__main__":
+def main(args):
     # enable compression of NULLs and raster maps
     os.environ["GRASS_COMPRESS_NULLS"] = "1"
     os.environ["GRASS_COMPRESSR"] = "ZSTD"
     os.environ["GRASS_ZLIB_LEVEL"] = "6"
     # set GRASS paths
-    GISDBASE = "/share/data/EU/climatic/DWD/COSMO_REA6/T/3D/grassdb"
-    REGISTER = "/share/data/EU/climatic/DWD/COSMO_REA6/T/3D/register"
-    LOCATION = "epsg3035"  # output location
+    GISDBASE = args.grassdata
+    LOCATION = args.location
+    if args.mapset:
+        MAPSET = args.mapset
+    else:
+        MAPSET = "PERMANENT"
 
+    mapsetfmt = None
+    if args.ymapset:
+        mapsetfmt = "{va}_%Y".format(va=MAPSET)
+    elif args.mmapset:
+        mapsetfmt = "{va}_%Y_%m".format(va=MAPSET)
     # check if input location exists
     loc_path = os.path.join(GISDBASE, LOCATION)
     if not os.path.exists(loc_path):
         raise TypeError("Input location: {} does not exists".format(loc_path))
 
+    mapsetfmt = None
+    if args.ymapset:
+        mapsetfmt = "{va}_%Y".format(va=MAPSET)
+    elif args.mmapset:
+        mapsetfmt = "{va}_%Y_%m".format(va=MAPSET)
+
     # open a GRASS session in PERMANENT
     with gs.Session(grassbin=gs.GRASSBIN,
                     gisdb=GISDBASE,
                     location=LOCATION,
-                    mapset="PERMANENT") as sess:
-        register(LOCATION, mset_pat="r2015_*", rast_pat="*",
-                 datefmt="%Y%m%d_%H", mapset_fmt="r%Y_%m",
-                 raster_fmt="{base}_{date:%Y%m}",
-                 sep='|', reg_dir=REGISTER,
-                 overwrite=True)
+                    mapset=MAPSET) as sess:
+        register(mset_pat="r2015_*", rast_pat="*",
+                 datefmt="%Y%m%d_%H", mapset_fmt=mapsetfmt,
+                 raster_fmt="%Y_%m_%d_%H",
+                 sep='|', overwrite=True)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    args = parser.parse_args()
+    parser.add_argument("-g", "--grassdata", help="The full path to GRASSDATA",
+                        required=True)
+    parser.add_argument("-l", "--location", help="The GRASS LOCATION to use",
+                        required=True)
+    parser.add_argument("-m", "--mapset", default="PERMANENT",
+                        help="The GRASS MAPSET to use (default: %(default)s, "
+                        "it is not suggested to use this)")
+    parser.add_argument("-f", "--formats", help="The format of the raster maps"
+                        "")
+    parser.add_argument("-n", "--nprocs", type=int, default=2,
+                        help="Processors' number to use (default: %(default)s)")
+    parser.add_argument("-o", "--overwrite", action="store_true",
+                        help="Set overwrite")
+    parser.add_argument("-Y", "--ymapset", action="store_true",
+                        help="Create annual mapset")
+    parser.add_argument("-M", "--mmapset", action="store_true",
+                        help="Create monthly mapset")
+    main(args)
