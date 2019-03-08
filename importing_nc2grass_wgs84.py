@@ -131,7 +131,7 @@ def convert_maps(base, date=None, year=None, month=None, startnum=1, log=None):
                 Module("g.remove", type="raster", name=inn, flags="f")
             except CalledModuleError:
                 continue
-        if base == 'TOT_PRECIP':
+        elif base == 'TOT_PRECIP':
             try:
                 mapc = Module("r.mapcalc", expression="{ou} = if({inn} < 0, 0,"
                               " {inn})".format(ou=out, inn=inn),
