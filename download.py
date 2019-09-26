@@ -10,8 +10,10 @@ import ftplib
 import os
 import argparse
 
-DWD_HOST = "ftp-cdc.dwd.de"
-COSMO_REA6_DIR = "pub/REA/COSMO_REA6/"
+COSMO_REA6_HOST = "opendata.dwd.de"
+COSMO_REA6_DIR = "climate_environment/REA/COSMO_REA6/"
+
+COSMO_REA2_HOST = "ftp.meteo.uni-bonn.de"
 COSMO_REA2_DIR = "pub/reana/COSMO_REA2/"
 
 REA_TIME_LIST = ['constant', 'daily', 'hourly', 'monthly']
@@ -75,7 +77,7 @@ def download(host, path, pattern, down_dir='download'):
     for i, fname in enumerate(flist):
         fpath = os.path.join(down_dir, f"{fname}")
         if os.path.exists(fpath):
-             print(f"    - {i+1:3d}/{flen:3d}: {fname} {fpath}, already exists!")
+            print(f"    - {i+1:3d}/{flen:3d}: {fname} {fpath}, already exists!")
         else:
             print(f"    - {i+1:3d}/{flen:3d}: {fname} {fpath}")
             ftp.retrbinary(f"RETR {fname}", open(fpath, 'wb').write)
@@ -83,8 +85,10 @@ def download(host, path, pattern, down_dir='download'):
 def main(args):
     if args.rea2:
         mydir = COSMO_REA2_DIR
+        host = COSMO_REA2_HOST
     elif args.rea6:
         mydir = COSMO_REA6_DIR
+        host = COSMO_REA6_HOST
     if args.D3:
         typ = "3D"
     else:
@@ -95,7 +99,7 @@ def main(args):
                 mypath = '/'.join([mydir, args.time, typ, var, f"{year}"])
             else:
                 mypath = '/'.join([mydir, args.time, typ, var])
-            download(host=DWD_HOST, path=mypath,
+            download(host=host, path=mypath,
                      # pattern='T_2M.2D.201512.grb.bz2')
                      pattern='*{ye}*'.format(ye=year),
                      down_dir=args.OUTPUT_DIR)
